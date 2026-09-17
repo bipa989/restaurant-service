@@ -1,0 +1,6 @@
+services:
+  kafka:
+    image: apache/kafka:4.0.1
+    container_name: restaurant-kafka
+    ports:
+      - "9092:9092"

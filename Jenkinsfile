@@ -58,6 +58,17 @@ pipeline {
                 }
             }
         }
+        stage('Docker Push') {
+            steps {
+                sh '''
+                    docker tag restaurant-service:jenkins \
+                    724680459203.dkr.ecr.ap-south-1.amazonaws.com/restaurant-service:jenkins
+
+                    docker push \
+                    724680459203.dkr.ecr.ap-south-1.amazonaws.com/restaurant-service:jenkins
+                '''
+            }
+        }
 
         stage('Deploy') {
             steps {

@@ -58,6 +58,7 @@ pipeline {
                 }
             }
         }
+
         stage('Docker Push') {
             steps {
                 sh '''
@@ -70,10 +71,40 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to EC2') {
             steps {
-                sh 'docker rm -f restaurant-service || true'
-                sh 'docker run -d --name restaurant-service -p 9097:9097 restaurant-service:jenkins'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-ecr-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    sh '''
+                        export AWS_DEFAULT_REGION=ap-south-1
+
+                        COMMAND_ID=$(aws ssm send-command \
+                            --instance-ids i-0d0960ced8523acb5 \
+                            --document-name "AWS-RunShellScript" \
+                            --parameters 'commands=[
+                                "set -e",
+                                "aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 724680459203.dkr.ecr.ap-south-1.amazonaws.com",
+                                "docker pull 724680459203.dkr.ecr.ap-south-1.amazonaws.com/restaurant-service:jenkins",
+                                "docker rm -f restaurant-service || true",
+                                "docker run -d --name restaurant-service --network restaurant-network -p 9097:9097 --env-file /home/ec2-user/restaurant-service.env 724680459203.dkr.ecr.ap-south-1.amazonaws.com/restaurant-service:jenkins"
+                            ]' \
+                            --query 'Command.CommandId' \
+                            --output text)
+
+                        echo "SSM Command ID: $COMMAND_ID"
+
+                        sleep 5
+
+                        aws ssm get-command-invocation \
+                            --command-id "$COMMAND_ID" \
+                            --instance-id i-0d0960ced8523acb5
+                    '''
+                }
             }
         }
 
